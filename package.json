@@ -1,0 +1,18 @@
+{
+  "name": "dreamface_appDirect_router",
+  "version": "0.0.1",
+  "main": "index.js",
+  "engines": {
+    "node": ">=0.10.0"
+  },
+  "dependencies": {
+    "express": "*",
+    "oauth": ">= 0.9.10",
+    "q": "*",
+    "q-io": "*",
+    "xml2js": "*",
+    "crypto-js": "*",
+    "oauth-signature": "*",
+    "openid" : "*"
+  }
+}
