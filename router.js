@@ -2,7 +2,7 @@ var Q     = require('q'),
     cloud = require('./cloud'),
     //log   = new (require('./lib/utils/log')).Instance({label:'ROUTER'}),
 
-    maxTimeToWait = 30000;
+    maxTimeToWait = 60000;
     
 
 /**
@@ -30,8 +30,12 @@ exports.getServer = function ( param ) {
             }
         }
 
+        if ( !foundServer ) return Q.reject(
+            'no appropriate server was found for tenant "' + tenant + '"'
+        );
+
         return foundServer.isOnline
-            ? Q.resolve(foundServer)
+            ? Q.resolve(foundServer) // TODO found error if string
             : waitForEither([foundServer]);
 
     } else {
@@ -39,12 +43,12 @@ exports.getServer = function ( param ) {
         var offline = [],
             available = Object.keys(cloud)
             .sort(function(a,b){
-                return cloud[a].tenants.length < cloud[b].tenants.length
+                return cloud[a].tenants.length > cloud[b].tenants.length
             })
             .filter(function(name){
 
                 var server = cloud[name],
-                    shouldBeExcluded = exclude && !~exclude.indexOf(name);
+                    shouldBeExcluded = !!( exclude && !!~exclude.indexOf(name) );
 
                 if ( server.isOnline ) {
                     return !shouldBeExcluded;
@@ -55,10 +59,10 @@ exports.getServer = function ( param ) {
             });
 
         return available.length
-            ? Q.resolve(available[0])
+            ? Q.resolve(cloud[available[0]])
             : offline.length
                 ? waitForEither(offline) // promise
-                : Q.reject();
+                : Q.reject('no appropriate server was found');
     }
 };
 
@@ -66,10 +70,15 @@ exports.getServer = function ( param ) {
 function waitForEither ( servers ) {
 
     var D    = Q.defer(),
-        proc = setTimeout(function(){ D.reject() }, maxTimeToWait),
+        proc = setTimeout(function(){ D.reject(
+                'timeout expired to wait when servers ' +
+                JSON.stringify(servers) +
+                ' becomes online'
+            ) }, maxTimeToWait),
         resolved = false;
 
     servers.forEach(function(server){
+
         server.becameOnline.then(function(){
 
             if ( resolved ) return;

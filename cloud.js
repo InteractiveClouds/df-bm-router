@@ -6,6 +6,7 @@ var Q       = require('q'),
     out   = {},
     _s    = {},
     servers,
+    maxTimeToWait = 60000, // TODO to CFG
     regexp = {
             affectsTenantsList : /^\/?api\/tenant\/(?:create|remove)/
         };
@@ -76,14 +77,11 @@ function parseDFXAnswer ( json, serverName ) {
     return Q.reject();
 }
 
+function setNewRequest () {
 
-function _Server ( name, o ) {
-    this.name      = name;
-    this.address   = o.address;
-    this.parsedUrl = URL.parse(this.address);
-    this.creds     = o.credentials;
-    this.isOnline  = false;
-    this.ar        = new Request({
+    var name = this.name;
+
+    this.ar = new Request({
             authRequestParams : {
                 schema                 : 'oAuthSimpleSigned',
                 oauth_signature_method : 'HMAC-SHA1',
@@ -122,9 +120,22 @@ function _Server ( name, o ) {
         });
 }
 
+
+function _Server ( name, o ) {
+    this.name      = name;
+    this.address   = o.address;
+    this.parsedUrl = URL.parse(this.address);
+    this.creds     = o.credentials;
+    this.isOnline  = false;
+
+    setNewRequest.call(this); // this.ar
+}
+
 _Server.prototype.caughtInactive = function () {
 
     var server = this;
+
+    if ( server.pingProcess ) return;
 
     server.isOnline = false;
     server.tenants = [];
@@ -133,24 +144,34 @@ _Server.prototype.caughtInactive = function () {
     log.warn('Server "' + server.name + '" is inactive. Ping is started.');
 
     server.pingProcess = setInterval(function(){
-        server.ar.get('api/tenant/list')
-        .then(function(list){
 
-            clearInterval(server.pingProcess);
-            delete server.pingProcess;
+        var url = out[server.name].getUrl('api/tenant/list');
+        _s[server.name].ar.get(url)
+        .then(
+            function(list){
 
-            log.ok(
-                'Server "' + server.name + '" becames active. ' +
-                'Ping is stopped. Tenants : ' + JSON.stringify(list)
-            );
+                clearInterval(server.pingProcess);
+                delete server.pingProcess;
 
-            server.tenants = list;
+                log.ok(
+                    'Server "' + server.name + '" becames active. ' +
+                    'Ping is stopped. Tenants : ' + JSON.stringify(list)
+                );
 
-            server.isOnline = true;
-            server.D.resolve();
+                server.tenants = list;
 
-        });
-    }, 15000);
+                server.isOnline = true;
+                server.D.resolve();
+
+            },
+            function(error){
+                log.warn(
+                    'Failed ping request to server "' + server.name + '" ',
+                    ( error || 'empty error' )
+                );
+            }
+        );
+    }, 10000);
 };
 
 
@@ -185,8 +206,8 @@ function Server ( name, o ) {
 
             var n = this.name;
 
-            return _s[n].D instanceof Q.defer && _s[n].D.state === 'pending'
-                ? _s[name].D.promise
+            return _s[n].D instanceof Q.defer && Q.isPending(_s[n].D.promise)
+                ? _s[n].D.promise
                 : Q.resolve();
         }
     });
@@ -197,8 +218,14 @@ function Server ( name, o ) {
 
 }
 
-Server.prototype.get = function ( relUrl, query ) {
-    var server = _s[this.name],
+/**
+ * @param {String} relUrl relative url for particular server
+ * @param {Object} [query=null] url-query
+ * @param {Boolean} [wait=false] while the server becomes online
+ */
+Server.prototype.get = function ( relUrl, query, wait ) {
+    var serverName = this.name,
+        server = _s[this.name],
         url = out[this.name].getUrl(relUrl, query),
         affectsTenantsList = regexp.affectsTenantsList.test(relUrl);
 
@@ -211,13 +238,17 @@ Server.prototype.get = function ( relUrl, query ) {
         },
         function (error) {
 
-            if ( error.code !== 'ECONNREFUSED' ) return Q.reject(log.error(
-                'authRequest failed with uncnown code "' + error.code + '"'
-            ));
+            if ( error && error.code ) server.caughtInactive();
 
-            server.caughtInactive();
+                // TODO
+                //if ( error.code !== 'ECONNRESET' || ) return Q.reject(log.error(
+                //    'authRequest failed with uncnown code "' + error.code + '"'
+                //));
 
-            return Q.reject();
+            return wait
+                ? waitForEither([out[serverName]])
+                    .then(function(){out[serverName].get(relUrl, query)})
+                : Q.reject();
         }
     );
 };
@@ -237,3 +268,29 @@ Server.prototype.getUrl = function ( relUrl, query ) {
 
     return url;
 };
+
+
+function waitForEither ( servers ) {
+
+    var D    = Q.defer(),
+        proc = setTimeout(function(){ D.reject(
+                'timeout expired to wait when servers ' +
+                JSON.stringify(servers) +
+                ' becomes online'
+            ) }, maxTimeToWait),
+        resolved = false;
+
+    servers.forEach(function(server){
+
+        server.becameOnline.then(function(){
+
+            if ( resolved ) return;
+
+            resolved = true;
+            clearTimeout(proc);
+            D.resolve(server);
+        });
+    });
+
+    return D.promise;
+}

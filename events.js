@@ -2,6 +2,7 @@ var Q       = require('q'),
     Request = require('./request'),
     router  = require('./router'),
     CFG     = require('./config'),
+    log   = new (require('./lib/utils/log')).Instance({label:'EVENTS'}),
     xml2js  = require('xml2js'),
 
     xmlBuilder = new xml2js.Builder({
@@ -24,7 +25,7 @@ var Q       = require('q'),
         }
     });
 
-function uuid () { (new Date()).getTime() } // TODO 
+function uuid () { return (new Date()).getTime() } // TODO
 
 
 
@@ -43,8 +44,10 @@ module.exports = function ( req, res, next ) {
 
         if ( event.flag && event.flag[0] === 'STATELESS' ) return Q.resolve({
             success : true,
-            message : 'Recieved STATELESS appDirect event. Nothing is done.'
+            message : log.info('Recieved STATELESS appDirect event. Nothing is done.')
         });
+
+        log.info('event "' + event.type + '" recieved ');
 
         return events.hasOwnProperty(event.type)
             ? events[event.type](event)
@@ -52,8 +55,12 @@ module.exports = function ( req, res, next ) {
 
     })
     .then(
-        function(result){ answer(res, result) },
-        function(error) { answer(res, error)  }
+        function(result){
+            answer(res, result)
+        },
+        function(error) {
+            answer(res, error)
+        }
     );
 };
 
@@ -65,7 +72,7 @@ function answer ( res, obj ) {
 
     if ( typeof obj !== 'object' || !obj.hasOwnProperty('success') ) {
 
-        log.error(obj);
+        log.error( obj || 'empty error' );
 
         xml = xmlBuilder.buildObject({
             success : false,
@@ -102,43 +109,69 @@ function sayFailed () {
 
 var events = {
 
-    'SUBSCRIPTION_ORDER' : function (event, exclude) {
+    'SUBSCRIPTION_ORDER' : (function(){
 
-        var unique  = uuid(),
-            userid  = event.creator[0].openId[0],
-            exclude = exclude || [];
+        return function (event, exclude) {
 
-        return router.getServer(exclude)
-            .then(function(server){
-                return server.get('/tenant/create', {
-                    tenantid : unique,
+            var tenantid  = uuid(),
+                userid    = event.creator[0].openId[0];
+
+            return createTenant(tenantid, userid).then(function(){
+                return {
+                    success : true,
+                    message : 'Created tenant "' + tenantid + '" for user "' + userid + '"',
+                    accountIdentifier : tenantid
+                };
+            });
+        }
+
+        function createTenant ( tenantid, userid, exclude) {
+
+            var exclude = exclude || [];
+
+            return router.getServer(exclude).then(function(server){
+                return server.get('/api/tenant/create', {
+                    tenantid : tenantid,
                     userid   : userid,
                     usertype : 'openid',
                     roles    : 'developer'
                 })
+                .then(function(){
+                    log.ok(
+                        'Created tenant "' + tenantid + '" at server "' +
+                        server.name + '" for user "' + userid + '"'
+                    );
+                })
                 .fail(function(){
-                    exclude.push(server.name);
-                    return events.SUBSCRIPTION_ORDER(event, exclude)
+                    log.warn(
+                        'Failed to created the tenant "' + tenantid + '" at server "' +
+                        server.name + '" for user "' + userid + '"'
+                    );
+
+                    if ( server.isOnline ) exclude.push(server.name);
+                    return createTenant(tenantid, userid, exclude)
                 })
             })
-            .then(function(){
-                return {
-                    success : true,
-                    message : 'Created tenant "' + unique + '" for user "' + userid + '"',
-                    accountIdentifier : unique
-                };
-            });
+        }
+
+    })(),
+
+    'SUBSCRIPTION_CANCEL' : function ( event ) {
+
+        var account = event.payload[0].account[0].accountIdentifier[0];
+
+        return router.getServer( account )
+            .then(function(server){
+                return server.get('/api/tenant/remove', {
+                    tenantid : account
+                }, true)
+            })
+            .then(saySuccess);
     },
 
-    //'SUBSCRIPTION_CANCEL' : function ( event ) {
-    //    return removeTenant(
-    //        event.payload[0].account[0].accountIdentifier[0]
-    //    )
-    //},
-
-    //'SUBSCRIPTION_CHANGE' : function ( event ) {
-    //    return saySuccess();
-    //},
+    'SUBSCRIPTION_CHANGE' : function ( event ) {
+        return saySuccess();
+    },
 
     //'USER_ASSIGNMENT'   : function ( event ) {
     //    return assignUser(
@@ -154,9 +187,9 @@ var events = {
     //    )
     //},
 
-    //'SUBSCRIPTION_NOTICE' : (function(){
+    'SUBSCRIPTION_NOTICE' : (function(){
 
-    //    var notices = {
+        var notices = {
     //        'DEACTIVATED' : function ( event ) {
     //            return tenants.deactivate(event.payload[0].account[0].accountIdentifier[0])
     //                .then(saySuccess);
@@ -165,43 +198,50 @@ var events = {
     //            return tenants.activate(event.payload[0].account[0].accountIdentifier[0])
     //                .then(saySuccess);
     //        },
-    //        'CLOSED' : function ( event ) {
-    //            return removeTenant(
-    //                event.payload[0].account[0].accountIdentifier[0]
-    //            )
-    //        },
-    //        'UPCOMING_INVOICE' : function ( event ) {
-    //            return saySuccess();
-    //        }
-    //    };
+            'CLOSED' : function ( event ) {
 
-    //    return function ( event ) {
-    //        var notice = event.payload[0].notice[0].type[0];
+                var account = event.payload[0].account[0].accountIdentifier[0];
 
-    //        return notices.hasOwnProperty(notice)
-    //            ? notices[notice](event)
-    //            : Q.reject('unknown type of notice"' + notice + '"');
-    //        
-    //    }
-    //})(),
+                return router.getServer( account )
+                    .then(function(server){
+                        return server.get('/api/tenant/remove', {
+                            tenantid : account
+                        })
+                    })
+                    .then(saySuccess);
+            },
+            'UPCOMING_INVOICE' : function ( event ) {
+                return saySuccess();
+            }
+        };
 
-    //'ADDON_ORDER' : function ( event ) {
-    //    return sayFailed();
-    //},
+        return function ( event ) {
+            var notice = event.payload[0].notice[0].type[0];
 
-    //'ADDON_CHANGE' : function ( event ) {
-    //    return sayFailed();
-    //},
+            return notices.hasOwnProperty(notice)
+                ? notices[notice](event)
+                : Q.reject('unknown type of notice"' + notice + '"');
 
-    //'ADDON_BIND' : function ( event ) {
-    //    return sayFailed();
-    //},
+        }
+    })(),
 
-    //'ADDON_UNBIND' : function ( event ) {
-    //    return sayFailed();
-    //},
+    'ADDON_ORDER' : function ( event ) {
+        return sayFailed();
+    },
 
-    //'ADDON_CANCEL' : function ( event ) {
-    //    return sayFailed();
-    //}
+    'ADDON_CHANGE' : function ( event ) {
+        return sayFailed();
+    },
+
+    'ADDON_BIND' : function ( event ) {
+        return sayFailed();
+    },
+
+    'ADDON_UNBIND' : function ( event ) {
+        return sayFailed();
+    },
+
+    'ADDON_CANCEL' : function ( event ) {
+        return sayFailed();
+    }
 };
