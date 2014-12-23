@@ -2,11 +2,11 @@ var Q       = require('q'),
     URL     = require('url'),
     Request = require('./request'),
     log     = new (require('./lib/utils/log')).Instance({label:'CLOUD'}),
+    utils   = require('./utils'),
 
     out   = {},
     _s    = {},
-    servers,
-    maxTimeToWait = 60000, // TODO to CFG
+    servers = CFG.servers || {},
     regexp = {
             affectsTenantsList : /^\/?api\/tenant\/(?:create|remove)/
         };
@@ -18,9 +18,6 @@ module.exports.init = function () {
 
     var tasks = [];
 
-    try { servers = require('./config').servers }
-    catch (e) { return Q.reject('can\'t find configuration file') }
-    
     var serversNames = Object.keys(servers),
         serversQuantity = serversNames.length;
     
@@ -171,7 +168,7 @@ _Server.prototype.caughtInactive = function () {
                 );
             }
         );
-    }, 10000);
+    }, CFG.pingInterval);
 };
 
 
@@ -246,7 +243,7 @@ Server.prototype.get = function ( relUrl, query, wait ) {
                 //));
 
             return wait
-                ? waitForEither([out[serverName]])
+                ? utils.waitForEither([out[serverName]])
                     .then(function(){out[serverName].get(relUrl, query)})
                 : Q.reject();
         }
@@ -268,29 +265,3 @@ Server.prototype.getUrl = function ( relUrl, query ) {
 
     return url;
 };
-
-
-function waitForEither ( servers ) {
-
-    var D    = Q.defer(),
-        proc = setTimeout(function(){ D.reject(
-                'timeout expired to wait when servers ' +
-                JSON.stringify(servers) +
-                ' becomes online'
-            ) }, maxTimeToWait),
-        resolved = false;
-
-    servers.forEach(function(server){
-
-        server.becameOnline.then(function(){
-
-            if ( resolved ) return;
-
-            resolved = true;
-            clearTimeout(proc);
-            D.resolve(server);
-        });
-    });
-
-    return D.promise;
-}

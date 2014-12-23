@@ -1,9 +1,13 @@
 #!/usr/bin/env node
 
+global.CFG = require('./config'); // TODO extend with local and check
+
 var Log       = require('./lib/utils/log'),
     path      = require('path'),
     cloud     = require('./cloud'),
     theServer = require('./server');
+
+
 
 Log.init.stdout({});
 

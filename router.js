@@ -2,7 +2,7 @@ var Q     = require('q'),
     cloud = require('./cloud'),
     //log   = new (require('./lib/utils/log')).Instance({label:'ROUTER'}),
 
-    maxTimeToWait = 60000;
+    utils = require('./utils');
     
 
 /**
@@ -36,7 +36,7 @@ exports.getServer = function ( param ) {
 
         return foundServer.isOnline
             ? Q.resolve(foundServer) // TODO found error if string
-            : waitForEither([foundServer]);
+            : utils.waitForEither([foundServer]);
 
     } else {
 
@@ -61,33 +61,7 @@ exports.getServer = function ( param ) {
         return available.length
             ? Q.resolve(cloud[available[0]])
             : offline.length
-                ? waitForEither(offline) // promise
+                ? utils.waitForEither(offline) // promise
                 : Q.reject('no appropriate server was found');
     }
 };
-
-
-function waitForEither ( servers ) {
-
-    var D    = Q.defer(),
-        proc = setTimeout(function(){ D.reject(
-                'timeout expired to wait when servers ' +
-                JSON.stringify(servers) +
-                ' becomes online'
-            ) }, maxTimeToWait),
-        resolved = false;
-
-    servers.forEach(function(server){
-
-        server.becameOnline.then(function(){
-
-            if ( resolved ) return;
-
-            resolved = true;
-            clearTimeout(proc);
-            D.resolve(server);
-        });
-    });
-
-    return D.promise;
-}

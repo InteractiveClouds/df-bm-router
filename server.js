@@ -12,7 +12,7 @@ module.exports.start = function () {
 
     delete module.exports.start;
 
-    app.set('port', 7000);
+    app.set('port', CFG.theServerPort);
 
     app.get('/studio/login',    login);
     app.get('/appdirect/event', events);
