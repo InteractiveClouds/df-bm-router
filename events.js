@@ -173,31 +173,67 @@ var events = {
         return saySuccess();
     },
 
-    //'USER_ASSIGNMENT'   : function ( event ) {
-    //    return assignUser(
-    //        event.payload[0].account[0].accountIdentifier[0],
-    //        event.payload[0].user[0].openId[0]
-    //    )
-    //},
+    'USER_ASSIGNMENT'   : function ( event ) {
 
-    //'USER_UNASSIGNMENT' : function ( event ) {
-    //    return unassignUser(
-    //        event.payload[0].account[0].accountIdentifier[0],
-    //        event.payload[0].user[0].openId[0]
-    //    )
-    //},
+        var account = event.payload[0].account[0].accountIdentifier[0],
+            userid  = event.payload[0].user[0].openId[0];
+
+        return router.getServer( account )
+            .then(function(server){
+                return server.get('/api/user/create', {
+                    tenantid : account,
+                    userid   : userid,
+                    usertype : 'openid',
+                    userkind : 'system',
+                    roles    : 'developer'
+                }, true)
+            })
+            .then(saySuccess);
+    },
+
+    'USER_UNASSIGNMENT' : function ( event ) {
+
+        var account = event.payload[0].account[0].accountIdentifier[0],
+            userid  = event.payload[0].user[0].openId[0];
+
+        return router.getServer( account )
+            .then(function(server){
+                return server.get('/api/user/remove', {
+                    tenantid : account,
+                    userid   : userid
+                }, true)
+            })
+            .then(saySuccess);
+    },
 
     'SUBSCRIPTION_NOTICE' : (function(){
 
         var notices = {
-    //        'DEACTIVATED' : function ( event ) {
-    //            return tenants.deactivate(event.payload[0].account[0].accountIdentifier[0])
-    //                .then(saySuccess);
-    //        },
-    //        'REACTIVATED' : function ( event ) {
-    //            return tenants.activate(event.payload[0].account[0].accountIdentifier[0])
-    //                .then(saySuccess);
-    //        },
+
+            'DEACTIVATED' : function ( event ) {
+
+                var account = event.payload[0].account[0].accountIdentifier[0];
+
+                return router.getServer( account )
+                    .then(function(server){
+                        return server.get('/api/tenant/deactivate', {
+                            tenantid : account
+                        }, true)
+                    })
+                    .then(saySuccess);
+            },
+            'REACTIVATED' : function ( event ) {
+
+                var account = event.payload[0].account[0].accountIdentifier[0];
+
+                return router.getServer( account )
+                    .then(function(server){
+                        return server.get('/api/tenant/activate', {
+                            tenantid : account
+                        }, true)
+                    })
+                    .then(saySuccess);
+            },
             'CLOSED' : function ( event ) {
 
                 var account = event.payload[0].account[0].accountIdentifier[0];
