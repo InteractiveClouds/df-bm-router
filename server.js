@@ -3,6 +3,7 @@ var log     = new (require('./lib/utils/log')).Instance({label:'SERVER'}),
     express = require('express'),
     login   = require('./login'),
     events  = require('./events'),
+    gate    = require('./lib/auth').gate,
 
     app = express();
 
@@ -15,7 +16,7 @@ module.exports.start = function () {
     app.set('port', CFG.theServerPort);
 
     app.get('/studio/login',    login);
-    app.get('/appdirect/event', events);
+    app.get('/appdirect/event', gate.oAuthSimpleSigned, events);
 
     http.createServer(app).listen(app.get('port'), function(){
       log.info('The appDirect router server listening on port ' + app.get('port'));
