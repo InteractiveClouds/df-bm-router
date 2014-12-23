@@ -1,7 +1,6 @@
 var Q       = require('q'),
     Request = require('./request'),
     router  = require('./router'),
-    CFG     = require('./config'),
     log   = new (require('./lib/utils/log')).Instance({label:'EVENTS'}),
     xml2js  = require('xml2js'),
 
@@ -35,19 +34,15 @@ module.exports = function ( req, res, next ) {
 
     appDirect.get({url: url})
     .then(function(json){
-        var event = json.event;
 
-        if ( typeof event !== 'object' ) return Q.reject(
-            'wrong format of appdirect event.\n\n' +
-            ( typeof json === 'object' ? JSON.stringify(json) : json )
-        );
+        var event = json && json.event;
+
+        if ( !checkAndLogEvent(json) ) return Q.reject();
 
         if ( event.flag && event.flag[0] === 'STATELESS' ) return Q.resolve({
             success : true,
             message : log.info('Recieved STATELESS appDirect event. Nothing is done.')
         });
-
-        log.info('event "' + event.type + '" recieved ');
 
         return events.hasOwnProperty(event.type)
             ? events[event.type](event)
@@ -63,6 +58,36 @@ module.exports = function ( req, res, next ) {
         }
     );
 };
+
+function checkAndLogEvent ( json ) {
+
+    var event = json && json.event;
+
+    if ( typeof event !== 'object' ) {
+        log.warn('wrong format of appdirect event.\n\n', json);
+        return false;
+    }
+
+    var type    = event.type,
+        creator = event.creator            && event.creator[0].openId[0],
+        account = event.payload[0].account && event.payload[0].account[0].accountIdentifier[0],
+        notice  = event.payload[0].notice  && event.payload[0].notice[0].type[0],
+        userid  = event.payload[0].user    && event.payload[0].user[0].openId[0];
+
+    if ( !type ) {
+        log.warn('wrong format of appdirect event.\n\n', json);
+        return false;
+    }
+
+    log.info(
+        'event "' + type + '"' + ( notice ? ' / "' + notice + '"' : '' ) + ' is recieved:\n' +
+        ( creator ? '\t\tcreator : ' + creator + '\n' : '' ) +
+        ( account ? '\t\taccount : ' + account + '\n' : '' ) +
+        ( userid  ? '\t\tuserid  : ' + userid  + '\n' : '' )
+    );
+
+    return true;
+}
 
 
 
@@ -81,6 +106,8 @@ function answer ( res, obj ) {
 
     } else {
 
+        log.ok( obj.message || 'empty message');
+
         xml = xmlBuilder.buildObject(obj);
 
     }
@@ -93,8 +120,13 @@ function answer ( res, obj ) {
 }
 
 
-function saySuccess () {
-    return { success : true };
+function saySuccess ( o ) {
+    var response = { success : true };
+
+    if ( o.message           ) response.message           = o.message;
+    if ( o.accountIdentifier ) response.accountIdentifier = o.accountIdentifier;
+
+    return response;
 }
 
 
@@ -116,12 +148,12 @@ var events = {
             var tenantid  = uuid(),
                 userid    = event.creator[0].openId[0];
 
-            return createTenant(tenantid, userid).then(function(){
-                return {
-                    success : true,
-                    message : 'Created tenant "' + tenantid + '" for user "' + userid + '"',
+            return createTenant(tenantid, userid).then(function(serverName){
+                return saySuccess({
+                    message : 'Created tenant "' + tenantid + '" at the server "' +
+                                serverName + '" for user "' + userid + '"',
                     accountIdentifier : tenantid
-                };
+                });
             });
         }
 
@@ -136,12 +168,7 @@ var events = {
                     usertype : 'openid',
                     roles    : 'developer'
                 })
-                .then(function(){
-                    log.ok(
-                        'Created tenant "' + tenantid + '" at server "' +
-                        server.name + '" for user "' + userid + '"'
-                    );
-                })
+                .then(function(){ return server.name })
                 .fail(function(){
                     log.warn(
                         'Failed to created the tenant "' + tenantid + '" at server "' +
@@ -160,13 +187,15 @@ var events = {
 
         var account = event.payload[0].account[0].accountIdentifier[0];
 
-        return router.getServer( account )
-            .then(function(server){
-                return server.get('/api/tenant/remove', {
-                    tenantid : account
-                }, true)
+        return router.getServer( account ).then(function(server){
+            return server.get('/api/tenant/remove', { tenantid : account }, true)
+            .then(function(){
+                return saySuccess({
+                    message : 'Tenant "' + account +
+                            '" is removed from the server "' + server.name + '"'
+                });
             })
-            .then(saySuccess);
+        })
     },
 
     'SUBSCRIPTION_CHANGE' : function ( event ) {
@@ -180,15 +209,24 @@ var events = {
 
         return router.getServer( account )
             .then(function(server){
-                return server.get('/api/user/create', {
-                    tenantid : account,
-                    userid   : userid,
-                    usertype : 'openid',
-                    userkind : 'system',
-                    roles    : 'developer'
-                }, true)
+                return server.get(
+                    '/api/user/create',
+                    {
+                        tenantid : account,
+                        userid   : userid,
+                        usertype : 'openid',
+                        userkind : 'system',
+                        roles    : 'developer'
+                    },
+                    true
+                )
+                .then(function(){
+                    return saySuccess({
+                        message : 'User "' + userid + '" is assigned to the tenant "' +
+                                account + '" at the server "' + server.name + '"'
+                    })
+                })
             })
-            .then(saySuccess);
     },
 
     'USER_UNASSIGNMENT' : function ( event ) {
@@ -198,12 +236,21 @@ var events = {
 
         return router.getServer( account )
             .then(function(server){
-                return server.get('/api/user/remove', {
-                    tenantid : account,
-                    userid   : userid
-                }, true)
+                return server.get(
+                    '/api/user/remove',
+                    {
+                        tenantid : account,
+                        userid   : userid
+                    },
+                    true
+                )
+                .then(function(){
+                    return saySuccess({
+                        message : 'User "' + userid + '" is unassigned from the tenant "' +
+                                account + '" at the server "' + server.name + '"'
+                    })
+                })
             })
-            .then(saySuccess);
     },
 
     'SUBSCRIPTION_NOTICE' : (function(){
@@ -216,11 +263,20 @@ var events = {
 
                 return router.getServer( account )
                     .then(function(server){
-                        return server.get('/api/tenant/deactivate', {
-                            tenantid : account
-                        }, true)
+                        return server.get(
+                            '/api/tenant/deactivate',
+                            {
+                                tenantid : account
+                            },
+                            true
+                        )
+                        .then(function(){
+                            return saySuccess({
+                                message : 'Tenant "' + account +
+                                        '" is deactivated at the server "' + server.name + '"'
+                            });
+                        })
                     })
-                    .then(saySuccess);
             },
             'REACTIVATED' : function ( event ) {
 
@@ -228,11 +284,20 @@ var events = {
 
                 return router.getServer( account )
                     .then(function(server){
-                        return server.get('/api/tenant/activate', {
-                            tenantid : account
-                        }, true)
+                        return server.get(
+                            '/api/tenant/activate',
+                            {
+                                tenantid : account
+                            },
+                            true
+                        )
+                        .then(function(){
+                            return saySuccess({
+                                message : 'Tenant "' + account +
+                                        '" is reactivated at the server "' + server.name + '"'
+                            });
+                        })
                     })
-                    .then(saySuccess);
             },
             'CLOSED' : function ( event ) {
 
@@ -240,11 +305,20 @@ var events = {
 
                 return router.getServer( account )
                     .then(function(server){
-                        return server.get('/api/tenant/remove', {
-                            tenantid : account
+                        return server.get(
+                            '/api/tenant/remove',
+                            {
+                                tenantid : account
+                            },
+                            true
+                        )
+                        .then(function(){
+                            return saySuccess({
+                                message : 'Tenant "' + account +
+                                        '" is removed from the server "' + server.name + '"'
+                            });
                         })
                     })
-                    .then(saySuccess);
             },
             'UPCOMING_INVOICE' : function ( event ) {
                 return saySuccess();
