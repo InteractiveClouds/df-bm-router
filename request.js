@@ -59,6 +59,9 @@ var parseBody = (function(){
                 });
 
                 return D.promise;
+            },
+        html : function ( data ) {
+                return Q.reject('parsing of HTML is not implemented.');
             }
     };
 

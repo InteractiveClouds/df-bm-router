@@ -5,7 +5,7 @@ var Q       = require('q'),
     xml2js  = require('xml2js'),
 
     xmlBuilder = new xml2js.Builder({
-            rootName : 'event'
+            rootName : 'result'
         }),
 
     appDirect = new Request({
@@ -19,7 +19,8 @@ var Q       = require('q'),
             }
         },
         statusCase : {
-            '*' : function ( res ) { return Q.reject() },
+            '*' : function ( res ) { return Q.reject('got answer with status ' + res.status) },
+            401 : function ( res ) { return Q.reject('got answer with status 401') },
             200 : function ( res ) { return res.body }
         }
     });
@@ -41,7 +42,7 @@ module.exports = function ( req, res, next ) {
 
         if ( event.flag && event.flag[0] === 'STATELESS' ) return Q.resolve({
             success : true,
-            message : log.info('Recieved STATELESS appDirect event. Nothing is done.')
+            message : 'Recieved STATELESS appDirect event. Nothing is done.'
         });
 
         return events.hasOwnProperty(event.type)
@@ -115,7 +116,7 @@ function answer ( res, obj ) {
     res.set('Cache-Control', 'no-cache, no-store, max-age=0');
     res.set('Connection', 'close');
     res.setHeader( 'Content-Type', 'application/xml; charset=utf-8' );
-    res.header('Content-length', xml.length);
+    res.header('Content-Length', xml.length);
     res.end(xml);
 }
 
