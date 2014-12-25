@@ -143,31 +143,21 @@ _Server.prototype.caughtInactive = function () {
     server.pingProcess = setInterval(function(){
 
         var url = out[server.name].getUrl('api/tenant/list');
-        _s[server.name].ar.get(url)
-        .then(
-            function(list){
+        _s[server.name].ar.get(url).then(function(list){
 
-                clearInterval(server.pingProcess);
-                delete server.pingProcess;
+            clearInterval(server.pingProcess);
+            delete server.pingProcess;
 
-                log.ok(
-                    'Server "' + server.name + '" becames active. ' +
-                    'Ping is stopped. Tenants : ' + JSON.stringify(list)
-                );
+            log.ok(
+                'Server "' + server.name + '" becames active. ' +
+                'Ping is stopped. Tenants : ' + JSON.stringify(list)
+            );
 
-                server.tenants = list;
+            server.tenants = list;
 
-                server.isOnline = true;
-                server.D.resolve();
-
-            },
-            function(error){
-                log.warn(
-                    'Failed ping request to server "' + server.name + '" ',
-                    ( error || 'empty error' )
-                );
-            }
-        );
+            server.isOnline = true;
+            server.D.resolve();
+        });
     }, CFG.pingInterval);
 };
 
