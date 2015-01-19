@@ -1,12 +1,22 @@
+//
+//
+//
+//
+//
+// TODO answer.success --> Q.resolve ( see answer.js )
+//
+//
+//
+//
+//
+
+
 var Q       = require('q'),
     Request = require('./request'),
     router  = require('./router'),
-    log   = new (require('./lib/utils/log')).Instance({label:'EVENTS'}),
-    xml2js  = require('xml2js'),
-
-    xmlBuilder = new xml2js.Builder({
-            rootName : 'result'
-        }),
+    addons  = require('./addons'),
+    answer  = require('./answer'),
+    log     = new (require('./lib/utils/log')).Instance({label:'EVENTS'}),
 
     appDirect = new Request({
         authRequestParams : {
@@ -40,10 +50,9 @@ module.exports = function ( req, res, next ) {
 
         if ( !checkAndLogEvent(json) ) return Q.reject();
 
-        if ( event.flag && event.flag[0] === 'STATELESS' ) return Q.resolve({
-            success : true,
-            message : 'Recieved STATELESS appDirect event. Nothing is done.'
-        });
+        if ( event.flag && event.flag[0] === 'STATELESS' ) return Q.resolve(
+            'Recieved STATELESS appDirect event. Nothing is done.'
+        );
 
         return events.hasOwnProperty(event.type)
             ? events[event.type](event)
@@ -51,12 +60,10 @@ module.exports = function ( req, res, next ) {
 
     })
     .then(
-        function(result){
-            answer(res, result)
-        },
-        function(error) {
-            answer(res, error)
-        }
+        function (data) { return answer.success(res, data) },
+        function (error) { return answer.success(res, error) }
+        //answer.success.bind(null, res),
+        //answer.fail   .bind(null, res)
     );
 };
 
@@ -91,55 +98,6 @@ function checkAndLogEvent ( json ) {
 }
 
 
-
-function answer ( res, obj ) {
-
-    var xml;
-
-    if ( typeof obj !== 'object' || !obj.hasOwnProperty('success') ) {
-
-        log.error( obj || 'empty error' );
-
-        xml = xmlBuilder.buildObject({
-            success : false,
-            message : 'Internal dreamface server error.'
-        });
-
-    } else {
-
-        log.ok( obj.message || 'empty message');
-
-        xml = xmlBuilder.buildObject(obj);
-
-    }
-
-    res.set('Cache-Control', 'no-cache, no-store, max-age=0');
-    res.set('Connection', 'close');
-    res.setHeader( 'Content-Type', 'application/xml; charset=utf-8' );
-    res.header('Content-Length', xml.length);
-    res.end(xml);
-}
-
-
-function saySuccess ( o ) {
-    var response = { success : true };
-
-    if ( o.message           ) response.message           = o.message;
-    if ( o.accountIdentifier ) response.accountIdentifier = o.accountIdentifier;
-
-    return response;
-}
-
-
-function sayFailed () {
-    return {
-        success   : false,
-        errorCode : 'UNKNOWN_ERROR'
-    };
-}
-
-
-
 var events = {
 
     'SUBSCRIPTION_ORDER' : (function(){
@@ -150,7 +108,7 @@ var events = {
                 userid    = event.creator[0].openId[0];
 
             return createTenant(tenantid, userid).then(function(serverName){
-                return saySuccess({
+                return Q.resolve({
                     message : 'Created tenant "' + tenantid + '" at the server "' +
                                 serverName + '" for user "' + userid + '"',
                     accountIdentifier : tenantid
@@ -191,16 +149,16 @@ var events = {
         return router.getServer( account ).then(function(server){
             return server.get('/api/tenant/remove', { tenantid : account }, true)
             .then(function(){
-                return saySuccess({
-                    message : 'Tenant "' + account +
-                            '" is removed from the server "' + server.name + '"'
-                });
+                return Q.resolve(
+                    'Tenant "' + account +
+                    '" is removed from the server "' + server.name + '"'
+                );
             })
         })
     },
 
     'SUBSCRIPTION_CHANGE' : function ( event ) {
-        return saySuccess();
+        return Q.resolve();
     },
 
     'USER_ASSIGNMENT'   : function ( event ) {
@@ -222,10 +180,10 @@ var events = {
                     true
                 )
                 .then(function(){
-                    return saySuccess({
-                        message : 'User "' + userid + '" is assigned to the tenant "' +
-                                account + '" at the server "' + server.name + '"'
-                    })
+                    return Q.resolve(
+                        'User "' + userid + '" is assigned to the tenant "' +
+                        account + '" at the server "' + server.name + '"'
+                    )
                 })
             })
     },
@@ -246,10 +204,10 @@ var events = {
                     true
                 )
                 .then(function(){
-                    return saySuccess({
-                        message : 'User "' + userid + '" is unassigned from the tenant "' +
-                                account + '" at the server "' + server.name + '"'
-                    })
+                    return Q.resolve(
+                        'User "' + userid + '" is unassigned from the tenant "' +
+                        account + '" at the server "' + server.name + '"'
+                    )
                 })
             })
     },
@@ -272,10 +230,10 @@ var events = {
                             true
                         )
                         .then(function(){
-                            return saySuccess({
-                                message : 'Tenant "' + account +
-                                        '" is deactivated at the server "' + server.name + '"'
-                            });
+                            return Q.resolve(
+                                'Tenant "' + account +
+                                '" is deactivated at the server "' + server.name + '"'
+                            );
                         })
                     })
             },
@@ -293,10 +251,10 @@ var events = {
                             true
                         )
                         .then(function(){
-                            return saySuccess({
-                                message : 'Tenant "' + account +
-                                        '" is reactivated at the server "' + server.name + '"'
-                            });
+                            return Q.resolve(
+                                'Tenant "' + account +
+                                '" is reactivated at the server "' + server.name + '"'
+                            );
                         })
                     })
             },
@@ -314,15 +272,15 @@ var events = {
                             true
                         )
                         .then(function(){
-                            return saySuccess({
-                                message : 'Tenant "' + account +
-                                        '" is removed from the server "' + server.name + '"'
-                            });
+                            return Q.resolve(
+                                'Tenant "' + account +
+                                '" is removed from the server "' + server.name + '"'
+                            );
                         })
                     })
             },
             'UPCOMING_INVOICE' : function ( event ) {
-                return saySuccess();
+                return Q.resolve();
             }
         };
 
@@ -336,23 +294,9 @@ var events = {
         }
     })(),
 
-    'ADDON_ORDER' : function ( event ) {
-        return sayFailed();
-    },
-
-    'ADDON_CHANGE' : function ( event ) {
-        return sayFailed();
-    },
-
-    'ADDON_BIND' : function ( event ) {
-        return sayFailed();
-    },
-
-    'ADDON_UNBIND' : function ( event ) {
-        return sayFailed();
-    },
-
-    'ADDON_CANCEL' : function ( event ) {
-        return sayFailed();
-    }
+    'ADDON_ORDER'  : addons.bind(null, 'order'),
+    'ADDON_CHANGE' : addons.bind(null, 'change'),
+    'ADDON_BIND'   : addons.bind(null, 'bind'),
+    'ADDON_UNBIND' : addons.bind(null, 'unbind'),
+    'ADDON_CANCEL' : addons.bind(null, 'cancel'),
 };

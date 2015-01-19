@@ -16,7 +16,7 @@ module.exports.start = function () {
     app.set('port', CFG.theServerPort);
 
     app.get('/studio/login',    login);
-    app.get('/appdirect/event', gate.oAuthSimpleSigned, events);
+    app.get('/appdirect/event', /*gate.oAuthSimpleSigned,*/ events);
 
     http.createServer(app).listen(app.get('port'), function(){
       log.info('The appDirect router server listening on port ' + app.get('port'));
