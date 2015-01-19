@@ -48,7 +48,31 @@ var addons = {
         },
 
         cancel : function ( o ) {
-            return Q.reject(new AnswerError('the action CANCEL for PLUS_TEN is not implemented'));
+            return server.get(
+                '/api/limit/setLimit',
+                {
+                    tenant   : account,
+                    limit    : 'applications',
+                    action   : 'dec',
+                    value    : '10'
+                },
+                true
+            )
+            .then(function(){
+                return Q.resolve({message : 'applications limit decreased for 10'})
+            })
+            .fail(function( error ){
+
+                log.warn(
+                    'failed to decrease applications limit for account "' +
+                    account + '" of the server "' + server.name + '"'     ,
+                    error
+                );
+
+                return Q.reject(new AnswerError(
+                    'can not increase applications limit for 10'
+                ));
+            })
         }
     }
 };
