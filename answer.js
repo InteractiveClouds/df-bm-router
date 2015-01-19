@@ -62,4 +62,6 @@ function AnswerError ( o ) {
 
     if ( o.code )    this.errorCode = o.code;
     if ( o.message ) this.message   = o.message;
+
+    var t;
 };

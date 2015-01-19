@@ -60,8 +60,12 @@ module.exports = function ( req, res, next ) {
 
     })
     .then(
-        function (data) { return answer.success(res, data) },
-        function (error) { return answer.success(res, error) }
+        function (data) {
+            return answer.success(res, data)
+        },
+        function (error) {
+            return answer.success(res, error)
+        }
         //answer.success.bind(null, res),
         //answer.fail   .bind(null, res)
     );
@@ -294,7 +298,10 @@ var events = {
         }
     })(),
 
-    'ADDON_ORDER'  : addons.bind(null, 'order'),
+    'ADDON_ORDER'  : function (event) {
+        addons('order', event);
+    },
+    //'ADDON_ORDER'  : addons.bind(null, 'order'),
     'ADDON_CHANGE' : addons.bind(null, 'change'),
     'ADDON_BIND'   : addons.bind(null, 'bind'),
     'ADDON_UNBIND' : addons.bind(null, 'unbind'),
