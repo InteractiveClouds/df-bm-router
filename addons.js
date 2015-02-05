@@ -1,10 +1,12 @@
 var Q = require('q')
     answer = require('./answer'),
+    log    = new (require('./lib/utils/log')).Instance({label:'ADDONS'}),
     router = require('./router');
 
 var AnswerError = answer.Error;
 
 module.exports = function ( action, event ) {
+
     var account = event.payload[0].account[0].accountIdentifier[0],
         addonid = event.payload[0].order[0].addonOfferingCode[0];
     
@@ -21,16 +23,17 @@ var addons = {
         order : function ( account, server ) {
 
             return server.get(
-                '/api/limit/setLimit',
+                '/api/limit/set',
                 {
                     tenant   : account,
                     limit    : 'applications',
-                    action   : 'inc',
+                    action   : '+',
                     value    : '10'
                 },
                 true
             )
-            .then(function(){
+            .then(function(data){
+                log.info('SETTING LIMIT: ', data);
                 return Q.resolve({message : 'applications limit increased for 10'})
             })
             .fail(function( error ){
@@ -47,21 +50,24 @@ var addons = {
             })
         },
 
-        cancel : function ( o ) {
+        cancel : function ( account, server ) {
             return server.get(
-                '/api/limit/setLimit',
+                '/api/limit/set',
                 {
                     tenant   : account,
                     limit    : 'applications',
-                    action   : 'dec',
+                    action   : '-',
                     value    : '10'
                 },
                 true
             )
-            .then(function(){
+            .then(function(data){
+                log.info('UNSETTING LIMIT: ', data);
                 return Q.resolve({message : 'applications limit decreased for 10'})
             })
-            .fail(function( error ){
+            .fail(function(error){
+
+                console.log('ERROR: %s', error.message);
 
                 log.warn(
                     'failed to decrease applications limit for account "' +
@@ -72,7 +78,7 @@ var addons = {
                 return Q.reject(new AnswerError(
                     'can not increase applications limit for 10'
                 ));
-            })
+            });
         }
     }
 };

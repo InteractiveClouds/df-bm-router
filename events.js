@@ -16,6 +16,8 @@ var Q       = require('q'),
     router  = require('./router'),
     addons  = require('./addons'),
     answer  = require('./answer'),
+    parseEvent = require('./eventParser'),
+    notifications = require('./notifications'),
     log     = new (require('./lib/utils/log')).Instance({label:'EVENTS'}),
 
     appDirect = new Request({
@@ -41,12 +43,19 @@ function uuid () { return (new Date()).getTime() } // TODO
 
 module.exports = function ( req, res, next ) {
 
-    var url = req.query.url;
+    var url = req.query.url,
+        event;
 
     appDirect.get({url: url})
     .then(function(json){
 
-        var event = json && json.event;
+        log.info(json);
+
+        var parsedEvent = parseEvent(json.event);
+
+        if ( parsedEvent instanceof Error ) return Q.reject(log.error(parsedEvent));
+
+        event = json && json.event;
 
         if ( !checkAndLogEvent(json) ) return Q.reject();
 
@@ -61,13 +70,21 @@ module.exports = function ( req, res, next ) {
     })
     .then(
         function (data) {
+
+            if ( event && event.type ) {
+                notifications.publish(event.type, {success : true, event : event});
+            }
+
             return answer.success(res, data)
         },
         function (error) {
-            return answer.success(res, error)
+
+            if ( event && event.type ) {
+                notifications.publish(event.type, {success : false, event : event});
+            }
+
+            return answer.fail(res, error)
         }
-        //answer.success.bind(null, res),
-        //answer.fail   .bind(null, res)
     );
 };
 
@@ -146,6 +163,10 @@ var events = {
 
     })(),
 
+    'SUBSCRIPTION_CHANGE' : function ( event ) {
+        return Q.resolve();
+    },
+
     'SUBSCRIPTION_CANCEL' : function ( event ) {
 
         var account = event.payload[0].account[0].accountIdentifier[0];
@@ -159,10 +180,6 @@ var events = {
                 );
             })
         })
-    },
-
-    'SUBSCRIPTION_CHANGE' : function ( event ) {
-        return Q.resolve();
     },
 
     'USER_ASSIGNMENT'   : function ( event ) {
@@ -301,9 +318,11 @@ var events = {
     'ADDON_ORDER'  : function (event) {
         addons('order', event);
     },
-    //'ADDON_ORDER'  : addons.bind(null, 'order'),
     'ADDON_CHANGE' : addons.bind(null, 'change'),
     'ADDON_BIND'   : addons.bind(null, 'bind'),
     'ADDON_UNBIND' : addons.bind(null, 'unbind'),
-    'ADDON_CANCEL' : addons.bind(null, 'cancel'),
+    //'ADDON_CANCEL' : addons.bind(null, 'cancel'),
+    'ADDON_CANCEL'  : function (event) {
+        addons('cancel', event);
+    },
 };
