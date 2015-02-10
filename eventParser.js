@@ -52,7 +52,7 @@ extract.flag = function ( j, r, errors, fatals ) {
 
 extract.creator = function ( j, r, errors, fatals ) {
 
-    if ( !j.creator || !j.creator[0] ) return fatal.push('no "creator" field was found');
+    if ( !j.creator || !j.creator[0] ) return fatals.push('no "creator" field was found');
 
     r.creator = {};
 
