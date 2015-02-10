@@ -246,7 +246,7 @@ Server.prototype.getUrl = function ( relUrl, query ) {
     var server = _s[this.name],
         url = URL.format({
             protocol : server.parsedUrl.protocol,
-            host     : server.parsedUrl.host,
+            //host     : server.parsedUrl.host,
             port     : server.parsedUrl.port,
             hostname : server.parsedUrl.hostname,
             query    : query,
