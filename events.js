@@ -12,6 +12,7 @@
 
 
 var Q       = require('q'),
+    URL     = require('url'),
     Request = require('./request'),
     router  = require('./router'),
     addons  = require('./addons'),
@@ -126,9 +127,23 @@ var events = {
         return function (event, exclude) {
 
             var tenantid  = uuid(),
-                userid    = event.creator[0].openId[0];
+                userid    = event.creator[0].openId[0],
+                baseurl   = event.marketplace[0].baseUrl[0],
+                partner   = event.marketplace[0].partner[0],
+                logoutUrlTempl      = URL.resolve(baseurl, '/applogout?openid='),
+                sysUserManagmentUrl = URL.resolve(baseurl, '/account/assign');
 
-            return createTenant(tenantid, userid).then(function(serverName){
+            return createTenant({
+                tenantid : tenantid,
+                userid   : userid,
+                partner  : JSON.stringify({
+                        name : partner,
+                        redirect : {
+                            logoutUrlTempl      : logoutUrlTempl,
+                            sysUserManagmentUrl : sysUserManagmentUrl
+                        }
+                    })
+            }).then(function(serverName){
                 return Q.resolve({
                     message : 'Created tenant "' + tenantid + '" at the server "' +
                                 serverName + '" for user "' + userid + '"',
@@ -137,26 +152,27 @@ var events = {
             });
         }
 
-        function createTenant ( tenantid, userid, exclude) {
+        function createTenant ( o, exclude) {
 
             var exclude = exclude || [];
 
             return router.getServer(exclude).then(function(server){
                 return server.get('/api/tenant/create', {
-                    tenantid : tenantid,
-                    userid   : userid,
+                    tenantid : o.tenantid,
+                    userid   : o.userid,
+                    partner  : o.partner,
                     usertype : 'openid',
                     roles    : 'developer'
                 })
                 .then(function(){ return server.name })
                 .fail(function(){
                     log.warn(
-                        'Failed to created the tenant "' + tenantid + '" at server "' +
-                        server.name + '" for user "' + userid + '"'
+                        'Failed to created the tenant "' + o.tenantid + '" at server "' +
+                        server.name + '" for user "' + o.userid + '"'
                     );
 
                     if ( server.isOnline ) exclude.push(server.name);
-                    return createTenant(tenantid, userid, exclude)
+                    return createTenant( o, exclude )
                 })
             })
         }
