@@ -17,7 +17,7 @@ exports.success = function ( res, data ) {
         }
     } else response = { success : true }
 
-    log.ok( data || 'empty message');
+    log.ok( data || 'success answer with empty message');
 
     sendAnswer(res, response);
 };
@@ -27,7 +27,7 @@ exports.fail = function ( res, data ) {
             ? data
             : new AnswerError;
 
-    log.error( data || 'empty error' );
+    log.error( data || 'failed answer with empty message' );
 
     sendAnswer(res, response);
 };
@@ -38,6 +38,9 @@ exports.Error = AnswerError;
 function sendAnswer ( res, obj ) {
 
     var response = xmlBuilder.buildObject(obj);
+
+    // TODO remove
+    log.info('answered with the xml:\n' + response);
 
     res.set('Cache-Control', 'no-cache, no-store, max-age=0');
     res.set('Connection', 'close');
@@ -63,5 +66,5 @@ function AnswerError ( o ) {
     if ( o.code )    this.errorCode = o.code;
     if ( o.message ) this.message   = o.message;
 
-    var t;
+    log.warn('the AnswerError have been composed:\n' + JSON.stringify(this));
 };

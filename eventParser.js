@@ -35,7 +35,7 @@ var toExtract = {
     'ADDON_CHANGE'        : [ 'type', 'flag', 'creator', 'account', 'notice', 'user', 'order' ],
     'ADDON_BIND'          : [ 'type', 'flag', 'creator', 'account', 'notice', 'user', 'order' ],
     'ADDON_UNBIND'        : [ 'type', 'flag', 'creator', 'account', 'notice', 'user', 'order' ],
-    'ADDON_CANCEL'        : [ 'type', 'flag', 'creator', 'account', 'notice', 'user', 'order' ]
+    'ADDON_CANCEL'        : [ 'type', 'flag', 'creator', 'account',                   'order' ]
     */
 };
 

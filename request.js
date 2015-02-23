@@ -68,6 +68,9 @@ var parseBody = (function(){
     return function ( res ) {
         var ct = parseContentType(res.headers['content-type']);
 
+        // TODO remove
+        console.log( res.body.toString(ct.encoding) );
+
         return parse[ct.type](res.body.toString(ct.encoding));
     }
 })();

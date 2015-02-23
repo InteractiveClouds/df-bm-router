@@ -52,9 +52,9 @@ module.exports = function ( req, res, next ) {
 
         log.info(json);
 
-        var parsedEvent = parseEvent(json.event);
+        //var parsedEvent = parseEvent(json.event);
 
-        if ( parsedEvent instanceof Error ) return Q.reject(log.error(parsedEvent));
+        //if ( parsedEvent instanceof Error ) return Q.reject(log.error(parsedEvent));
 
         event = json && json.event;
 
@@ -332,13 +332,13 @@ var events = {
     })(),
 
     'ADDON_ORDER'  : function (event) {
-        addons('order', event);
+        return addons('order', event);
     },
     'ADDON_CHANGE' : addons.bind(null, 'change'),
     'ADDON_BIND'   : addons.bind(null, 'bind'),
     'ADDON_UNBIND' : addons.bind(null, 'unbind'),
     //'ADDON_CANCEL' : addons.bind(null, 'cancel'),
     'ADDON_CANCEL'  : function (event) {
-        addons('cancel', event);
+        return addons('cancel', event);
     },
 };
