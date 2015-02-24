@@ -1,16 +1,3 @@
-//
-//
-//
-//
-//
-// TODO answer.success --> Q.resolve ( see answer.js )
-//
-//
-//
-//
-//
-
-
 var Q       = require('q'),
     URL     = require('url'),
     Request = require('./request'),
@@ -47,20 +34,16 @@ module.exports = function ( req, res, next ) {
     var url = req.query.url,
         event;
 
-    appDirect.get({url: url})
-    .then(function(json){
+    appDirect.get({
+        url: url,
+        headers : {'Accept': 'application/json; charset=utf-8'}
+    })
+    .then(function(_event){
 
-        log.info(json);
+        if ( checkAndLogEvent(_event) ) event = _event;
+        else return Q.reject();
 
-        //var parsedEvent = parseEvent(json.event);
-
-        //if ( parsedEvent instanceof Error ) return Q.reject(log.error(parsedEvent));
-
-        event = json && json.event;
-
-        if ( !checkAndLogEvent(json) ) return Q.reject();
-
-        if ( event.flag && event.flag[0] === 'STATELESS' ) return Q.resolve(
+        if ( event.flag === 'STATELESS' ) return Q.resolve(
             'Recieved STATELESS appDirect event. Nothing is done.'
         );
 
@@ -72,9 +55,7 @@ module.exports = function ( req, res, next ) {
     .then(
         function (data) {
 
-            if ( event && event.type ) {
-                notifications.publish(event.type, {success : true, event : event});
-            }
+            notifications.publish(event.type, {success : true, event : event});
 
             return answer.success(res, data)
         },
@@ -89,32 +70,16 @@ module.exports = function ( req, res, next ) {
     );
 };
 
-function checkAndLogEvent ( json ) {
+function checkAndLogEvent ( event ) {
 
-    var event = json && json.event;
+    // TODO use eventParser instead
 
-    if ( typeof event !== 'object' ) {
-        log.warn('wrong format of appdirect event.\n\n', json);
+    if ( (typeof event !== 'object') || !event.hasOwnProperty('type') ) {
+        log.warn('wrong format of appdirect event.\n\n', event);
         return false;
     }
 
-    var type    = event.type,
-        creator = event.creator            && event.creator[0].openId[0],
-        account = event.payload[0].account && event.payload[0].account[0].accountIdentifier[0],
-        notice  = event.payload[0].notice  && event.payload[0].notice[0].type[0],
-        userid  = event.payload[0].user    && event.payload[0].user[0].openId[0];
-
-    if ( !type ) {
-        log.warn('wrong format of appdirect event.\n\n', json);
-        return false;
-    }
-
-    log.info(
-        'event "' + type + '"' + ( notice ? ' / "' + notice + '"' : '' ) + ' is recieved:\n' +
-        ( creator ? '\t\tcreator : ' + creator + '\n' : '' ) +
-        ( account ? '\t\taccount : ' + account + '\n' : '' ) +
-        ( userid  ? '\t\tuserid  : ' + userid  + '\n' : '' )
-    );
+    log.info(event);
 
     return true;
 }
@@ -127,9 +92,9 @@ var events = {
         return function (event, exclude) {
 
             var tenantid  = uuid(),
-                userid    = event.creator[0].openId[0],
-                baseurl   = event.marketplace[0].baseUrl[0],
-                partner   = event.marketplace[0].partner[0],
+                userid    = event.creator.openId,
+                baseurl   = event.marketplace.baseUrl,
+                partner   = event.marketplace.partner,
                 logoutUrlTempl      = URL.resolve(baseurl, '/applogout?openid='),
                 sysUserManagmentUrl = URL.resolve(baseurl, '/account/assign');
 
@@ -185,7 +150,7 @@ var events = {
 
     'SUBSCRIPTION_CANCEL' : function ( event ) {
 
-        var account = event.payload[0].account[0].accountIdentifier[0];
+        var account = event.payload.account.accountIdentifier;
 
         return router.getServer( account ).then(function(server){
             return server.get('/api/tenant/remove', { tenantid : account }, true)
@@ -200,8 +165,8 @@ var events = {
 
     'USER_ASSIGNMENT'   : function ( event ) {
 
-        var account = event.payload[0].account[0].accountIdentifier[0],
-            userid  = event.payload[0].user[0].openId[0];
+        var account = event.payload.account.accountIdentifier,
+            userid  = event.payload.user.openId;
 
         return router.getServer( account )
             .then(function(server){
@@ -227,8 +192,8 @@ var events = {
 
     'USER_UNASSIGNMENT' : function ( event ) {
 
-        var account = event.payload[0].account[0].accountIdentifier[0],
-            userid  = event.payload[0].user[0].openId[0];
+        var account = event.payload.account.accountIdentifier,
+            userid  = event.payload.user.openId;
 
         return router.getServer( account )
             .then(function(server){
@@ -255,7 +220,7 @@ var events = {
 
             'DEACTIVATED' : function ( event ) {
 
-                var account = event.payload[0].account[0].accountIdentifier[0];
+                var account = event.payload.account.accountIdentifier;
 
                 return router.getServer( account )
                     .then(function(server){
@@ -276,7 +241,7 @@ var events = {
             },
             'REACTIVATED' : function ( event ) {
 
-                var account = event.payload[0].account[0].accountIdentifier[0];
+                var account = event.payload.account.accountIdentifier;
 
                 return router.getServer( account )
                     .then(function(server){
@@ -297,7 +262,7 @@ var events = {
             },
             'CLOSED' : function ( event ) {
 
-                var account = event.payload[0].account[0].accountIdentifier[0];
+                var account = event.payload.account.accountIdentifier;
 
                 return router.getServer( account )
                     .then(function(server){
@@ -322,7 +287,7 @@ var events = {
         };
 
         return function ( event ) {
-            var notice = event.payload[0].notice[0].type[0];
+            var notice = event.payload.notice.type;
 
             return notices.hasOwnProperty(notice)
                 ? notices[notice](event)
@@ -331,14 +296,9 @@ var events = {
         }
     })(),
 
-    'ADDON_ORDER'  : function (event) {
-        return addons('order', event);
-    },
-    'ADDON_CHANGE' : addons.bind(null, 'change'),
-    'ADDON_BIND'   : addons.bind(null, 'bind'),
-    'ADDON_UNBIND' : addons.bind(null, 'unbind'),
-    //'ADDON_CANCEL' : addons.bind(null, 'cancel'),
-    'ADDON_CANCEL'  : function (event) {
-        return addons('cancel', event);
-    },
+    'ADDON_ORDER'  : addons,
+    'ADDON_CHANGE' : addons,
+    'ADDON_BIND'   : addons,
+    'ADDON_UNBIND' : addons,
+    'ADDON_CANCEL' : addons
 };

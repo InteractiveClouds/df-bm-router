@@ -5,27 +5,29 @@ var Q = require('q')
 
 var AnswerError = answer.Error;
 
-module.exports = function ( action, event ) {
+module.exports = function ( event ) {
 
     //return Q.resolve();
 
-    var account,
-        addonid,
-        errors = [];
+    var account = event.payload.account.accountIdentifier,
+        addonid;
 
     try {
-        account = event.payload[0].account[0].accountIdentifier[0],
-        addonid = event.payload[0].order[0].addonOfferingCode[0];
-    } catch (e) {}
+        addonid = event.payload.order.addonOfferingCode;
+    } catch (e) {
+        try {
+            addonid = event.payload.addonInstance.id
+        } catch (e) {}
+    }
 
-    if ( !account ) errors.push('no account ID was found');
-    if ( !addonid ) errors.push('no add-on ID was found');
+    if ( !addonid ) return Q.reject(new AnswerError('no add-on ID was found'));
 
-    if ( errors.length ) return Q.reject(new AnswerError(errors.toString()));
-    
+
     return addons.hasOwnProperty(addonid)
         ? router.getServer(account).then(function(server){
-                return addons[addonid][action](account, server)
+                return addons[addonid].hasOwnProperty(event.type)
+                    ? addons[addonid][event.type](event, server)
+                    : Q.reject(new AnswerError('unknown add-on type'));
             })
         : Q.reject(new AnswerError('unknown add-on id')); // TODO add errCode
 }
@@ -34,17 +36,18 @@ var addons = {
     'BASIC' : {
         // TODO set local scope for the THIS_ADDON_ID
 
-        order : function ( account, server ) {
+        ADDON_ORDER : function ( event, server ) {
 
             // TODO set local scope for the THIS_ADDON_ID
-            var THIS_ADDON_ID = 'BASIC';
+            var THIS_ADDON_ID = 'BASIC',
+                account = event.payload.account.accountIdentifier;
 
             return server.get(
                 '/api/limit/set',
                 {
                     tenant   : account,
                     limit    : 'users',
-                    action   : '=',
+                    action   : '+',
                     value    : '10'
                 },
                 true
@@ -70,10 +73,11 @@ var addons = {
             })
         },
 
-        cancel : function ( account, server ) {
+        ADDON_CANCEL : function ( event, server ) {
 
             // TODO set local scope for the THIS_ADDON_ID
-            var THIS_ADDON_ID = 'BASIC';
+            var THIS_ADDON_ID = 'BASIC',
+                account = event.payload.account.accountIdentifier;
 
             return server.get(
                 '/api/limit/set',

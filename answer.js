@@ -1,9 +1,7 @@
 var log    = new (require('./lib/utils/log')).Instance({label:'ANSWER'}),
-    xml2js = require('xml2js'),
+    xml2js = require('xml2js');
 
-    xmlBuilder = new xml2js.Builder({
-            rootName : 'result'
-        });
+//var xmlBuilder = new xml2js.Builder({ rootName : 'result' });
 
 
 exports.success = function ( res, data ) {
@@ -35,18 +33,17 @@ exports.fail = function ( res, data ) {
 exports.Error = AnswerError;
 
 
-function sendAnswer ( res, obj ) {
+function sendAnswer ( res, response ) {
 
-    var response = xmlBuilder.buildObject(obj);
+    //var response = xmlBuilder.buildObject(obj);
 
-    // TODO remove
-    log.info('answered with the xml:\n' + response);
+    var _response = JSON.stringify(response);
 
     res.set('Cache-Control', 'no-cache, no-store, max-age=0');
     res.set('Connection', 'close');
-    res.setHeader( 'Content-Type', 'application/xml; charset=utf-8' );
-    res.header('Content-Length', response.length);
-    res.end(response);
+    res.setHeader( 'Content-Type', 'application/json; charset=utf-8' );
+    res.header('Content-Length', _response.length);
+    res.end(_response);
 }
 
 /**

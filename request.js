@@ -12,10 +12,13 @@ function Request ( o ) {
     this.statusCase = o.statusCase || {};
 }
 
-Request.prototype.get = function ( url ) {
-    var that = this;
+Request.prototype.get = function ( o ) {
+    var that = this,
+        options = typeof o === 'string'
+            ? { url : o }
+            : o; // authRequest options object
 
-    return this.ar.get({url:url}).then(function (res) {
+    return this.ar.get(options).then(function (res) {
 
         return parseBody(res).then(function(data){
     
