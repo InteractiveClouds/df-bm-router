@@ -94,7 +94,7 @@ var events = {
                 userid    = event.creator.openId,
                 baseurl   = event.marketplace.baseUrl,
                 partner   = event.marketplace.partner,
-                _parnter  = partner.split('_')[0],
+                _partner  = partner.split('_')[0],
                 logoutUrlTempl,
                 sysUserManagmentUrl;
 
