@@ -94,13 +94,14 @@ var events = {
                 userid    = event.creator.openId,
                 baseurl   = event.marketplace.baseUrl,
                 partner   = event.marketplace.partner,
+                _parnter  = partner.split('_')[0],
                 logoutUrlTempl,
                 sysUserManagmentUrl;
 
-            if ( partner === 'IBM' ) {
+            if ( _partner === 'IBM' ) {
                 logoutUrlTempl      = URL.resolve(baseurl, '/applogout?openid=');
                 sysUserManagmentUrl = URL.resolve(baseurl, '/account/assign');
-            } else if ( partner === 'BLUEMIX' ) {
+            } else if ( _partner === 'BLUEMIX' ) {
                 logoutUrlTempl      = URL.resolve(
                     baseurl,
                     'https://login.ng.bluemix.net/UAALoginServerWAR/'+
@@ -109,7 +110,7 @@ var events = {
                 );
                 sysUserManagmentUrl = '';
             } else {
-                return Q.reject('unknown partner id "' + partner + '"');
+                return Q.reject(answer.Error('unknown partner id "' + partner + '"'));
             }
 
             return createTenant({
