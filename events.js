@@ -84,7 +84,6 @@ function checkAndLogEvent ( event ) {
     return true;
 }
 
-
 var events = {
 
     'SUBSCRIPTION_ORDER' : (function(){
@@ -95,8 +94,23 @@ var events = {
                 userid    = event.creator.openId,
                 baseurl   = event.marketplace.baseUrl,
                 partner   = event.marketplace.partner,
-                logoutUrlTempl      = URL.resolve(baseurl, '/applogout?openid='),
+                logoutUrlTempl,
+                sysUserManagmentUrl;
+
+            if ( partner === 'IBM' ) {
+                logoutUrlTempl      = URL.resolve(baseurl, '/applogout?openid=');
                 sysUserManagmentUrl = URL.resolve(baseurl, '/account/assign');
+            } else if ( partner === 'BLUEMIX' ) {
+                logoutUrlTempl      = URL.resolve(
+                    baseurl,
+                    'https://login.ng.bluemix.net/UAALoginServerWAR/'+
+                    'logout.jsp?redirect=https://console.ng.bluemix.net/'+
+                    '?ace_base=true&openid='
+                );
+                sysUserManagmentUrl = '';
+            } else {
+                return Q.reject('unknown partner id "' + partner + '"');
+            }
 
             return createTenant({
                 tenantid : tenantid,
