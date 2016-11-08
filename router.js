@@ -30,7 +30,7 @@ exports.getServer = function ( param ) {
             }
         }
 
-        if ( !foundServer ) return Q.reject(
+        if ( !foundServer ) return Q.resolve(
             'no appropriate server was found for tenant "' + tenant + '"'
         );
 
@@ -62,6 +62,6 @@ exports.getServer = function ( param ) {
             ? Q.resolve(cloud[available[0]])
             : offline.length
                 ? utils.waitForEither(offline) // promise
-                : Q.reject('no appropriate server was found');
+                : Q.resolve('no appropriate server was found');
     }
 };
